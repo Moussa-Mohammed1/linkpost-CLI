@@ -1,0 +1,42 @@
+{
+  "name": "linkpost-cli",
+  "version": "1.0.0",
+  "description": "Analyzes any software project in the current directory and generates a high-quality LinkedIn post about it.",
+  "type": "module",
+  "license": "MIT",
+  "repository": "github:Moussa-Mohammed1/post-cli",
+  "homepage": "https://github.com/Moussa-Mohammed1/post-cli",
+  "bin": {
+    "post": "./bin/post.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node bin/post.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "linkedin",
+    "cli",
+    "project-analyzer",
+    "social-media",
+    "post-generator"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
