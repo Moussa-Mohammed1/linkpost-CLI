@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { analyzeProject } from "../analyzer/analyze.js";
 import { generateContent } from "../content/generate.js";
+import { ensureGitIgnored } from "../core/gitignore.js";
 import { Logger } from "../core/logger.js";
 import { resolveProvider } from "../llm/provider.js";
 import { writeOutput } from "../output/writer.js";
@@ -59,6 +60,9 @@ export async function generatePost(input: GeneratePostInput): Promise<GeneratePo
     content,
     logText: logger.toText(),
   });
+
+  const ignored = await ensureGitIgnored(input.cwd);
+  if (ignored) emit("Added linkedin-post/ to .gitignore");
 
   return {
     ok: true,

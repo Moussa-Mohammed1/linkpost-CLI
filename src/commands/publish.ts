@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { CliResult } from "../core/types.js";
 import { LinkedInApiError, LinkedInClient } from "../linkedin/client.js";
+import { effectiveValue } from "../config/persist.js";
 import {
   clientEnv,
   clearCredentials,
@@ -66,7 +67,7 @@ export async function publishPost(opts: PublishInput): Promise<PublishResult> {
   }
 
   // --- authenticate ---
-  const envToken = process.env.LINKEDIN_ACCESS_TOKEN;
+  const envToken = effectiveValue("LINKEDIN_ACCESS_TOKEN").value;
   let credentials: OAuthCredentials;
   if (envToken) {
     credentials = { accessToken: envToken };
@@ -175,7 +176,7 @@ export async function publishPost(opts: PublishInput): Promise<PublishResult> {
 }
 
 function pickVisibility(): ShareVisibility {
-  const raw = process.env.LINKEDIN_VISIBILITY?.toUpperCase();
+  const raw = effectiveValue("LINKEDIN_VISIBILITY").value?.toUpperCase();
   return raw === "CONNECTIONS" || raw === "LOGGED_IN" ? raw : "PUBLIC";
 }
 

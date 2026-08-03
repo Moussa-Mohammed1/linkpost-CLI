@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { runCli } from "../src/index.js";
 import { generatePost } from "../src/commands/analyze.js";
 import { publishPost } from "../src/commands/publish.js";
-import { makeTmpProject, npmPackage } from "./helpers.js";
+import { makeTmpProject, npmPackage, isolateConfig } from "./helpers.js";
 
 describe("runCli", () => {
   it("prints version and exits 0", async () => {
@@ -25,6 +25,32 @@ describe("runCli", () => {
 
   it("rejects an unknown command", async () => {
     expect(await runCli(["frobnicate"])).toBe(2);
+  });
+
+  it("lists env vars as name=null when unset", async () => {
+    const restore = await isolateConfig();
+    const out: string[] = [];
+    const write = process.stdout.write;
+    process.stdout.write = ((chunk: string) => {
+      out.push(chunk);
+      return true;
+    }) as typeof process.stdout.write;
+    const saved = process.env.POST_LLM_MODEL;
+    try {
+      process.env.POST_LLM_MODEL = "test-model";
+      delete process.env.OPENAI_API_KEY;
+      const code = await runCli(["envs"]);
+      expect(code).toBe(0);
+      const text = out.join("");
+      expect(text).toContain("POST_LLM_MODEL=test-model");
+      expect(text).toContain("OPENAI_API_KEY=null");
+      expect(text).toContain("LINKEDIN_ACCESS_TOKEN=null");
+    } finally {
+      process.stdout.write = write;
+      if (saved === undefined) delete process.env.POST_LLM_MODEL;
+      else process.env.POST_LLM_MODEL = saved;
+      restore();
+    }
   });
 });
 
@@ -51,6 +77,7 @@ describe("generatePost pipeline", () => {
 
 describe("publishPost guardrails", () => {
   it("fails fast when content.txt is missing but identifies the fix", async () => {
+    const restore = await isolateConfig();
     const proj = await makeTmpProject({ "package.json": npmPackage({ name: "x" }) });
     try {
       delete process.env.LINKEDIN_ACCESS_TOKEN;
@@ -59,10 +86,12 @@ describe("publishPost guardrails", () => {
       expect(result.error).toMatch(/not found/);
     } finally {
       await proj.cleanup();
+      restore();
     }
   });
 
   it("explains missing credentials without crashing", async () => {
+    const restore = await isolateConfig();
     const proj = await makeTmpProject({ ...sampleFiles() });
     try {
       delete process.env.LINKEDIN_ACCESS_TOKEN;
@@ -73,6 +102,7 @@ describe("publishPost guardrails", () => {
       expect(result.error).toMatch(/LINKEDIN_CLIENT_ID|credentials/i);
     } finally {
       await proj.cleanup();
+      restore();
     }
   });
 });

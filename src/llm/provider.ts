@@ -1,3 +1,5 @@
+import { effectiveValue } from "../config/persist.js";
+
 export interface LlmRequest {
   system?: string;
   prompt: string;
@@ -12,7 +14,7 @@ export interface LlmProvider {
 }
 
 export function env(name: string): string | undefined {
-  const v = process.env[name];
+  const v = effectiveValue(name).value;
   return v && v.trim() ? v : undefined;
 }
 
