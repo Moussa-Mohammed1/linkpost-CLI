@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { generatePost } from "./commands/analyze.js";
 import { publishPost } from "./commands/publish.js";
+import { readEnvs } from "./commands/envs.js";
 import { loadPluginsFromDirs } from "./plugins/registry.js";
 
 export const VERSION = "1.0.0";
@@ -51,6 +52,7 @@ const HELP = `post — analyze a project and draft a LinkedIn post about it.
 Usage:
   post                  Analyze ./ and generate linkedin-post/
   post publish          Publish linkedin-post/content.txt (+ images/) to LinkedIn
+  post envs             Show the env vars this tool reads (name=null when unset)
 
 Options:
   --help, -h            Show this help
@@ -97,6 +99,19 @@ export async function runCli(argv: string[]): Promise<number> {
     if (link) process.stdout.write(`  ${link}\n`);
     if (result.mediaSkipped) process.stdout.write("  (published as text-only; images were skipped)\n");
     process.stdout.write("\n");
+    return 0;
+  }
+
+  if (command === "envs") {
+    const vars = readEnvs();
+    if (flags.json) {
+      process.stdout.write(JSON.stringify(vars, null, 2) + "\n");
+      return 0;
+    }
+    process.stdout.write("post: environment\n");
+    for (const v of vars) {
+      process.stdout.write(`  ${v.name}=${v.value ?? "null"}\n`);
+    }
     return 0;
   }
 

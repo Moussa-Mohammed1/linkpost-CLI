@@ -61,6 +61,24 @@ The analyze pipeline:
 6. **Output** — writes `linkedin-post/` with `content.txt`, `metadata.json`,
    `logs.txt` and an empty `images/` directory.
 
+### `post envs` — inspect configuration
+
+Prints every environment variable the tool reads, with its current value
+(`name=null` when unset). Use it to debug why the LLM or LinkedIn path isn't
+picking up configuration:
+
+```text
+post: environment
+  POST_LLM_API_KEY=null
+  OPENAI_API_KEY=null
+  POST_LLM_BASE_URL=null
+  POST_LLM_MODEL=gpt-4o-mini
+  LINKEDIN_CLIENT_ID=null
+  ...
+```
+
+`post envs --json` prints the same data machine-readable.
+
 ### `post publish` — publish
 
 Reads `linkedin-post/content.txt`, uploads every supported image (PNG/JPEG/GIF/

@@ -26,6 +26,30 @@ describe("runCli", () => {
   it("rejects an unknown command", async () => {
     expect(await runCli(["frobnicate"])).toBe(2);
   });
+
+  it("lists env vars as name=null when unset", async () => {
+    const out: string[] = [];
+    const write = process.stdout.write;
+    process.stdout.write = ((chunk: string) => {
+      out.push(chunk);
+      return true;
+    }) as typeof process.stdout.write;
+    const saved = process.env.POST_LLM_MODEL;
+    try {
+      process.env.POST_LLM_MODEL = "test-model";
+      delete process.env.OPENAI_API_KEY;
+      const code = await runCli(["envs"]);
+      expect(code).toBe(0);
+      const text = out.join("");
+      expect(text).toContain("POST_LLM_MODEL=test-model");
+      expect(text).toContain("OPENAI_API_KEY=null");
+      expect(text).toContain("LINKEDIN_ACCESS_TOKEN=null");
+    } finally {
+      process.stdout.write = write;
+      if (saved === undefined) delete process.env.POST_LLM_MODEL;
+      else process.env.POST_LLM_MODEL = saved;
+    }
+  });
 });
 
 describe("generatePost pipeline", () => {
