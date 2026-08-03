@@ -120,6 +120,24 @@ export LINKEDIN_CLIENT_ID=… LINKEDIN_CLIENT_SECRET=…
 post publish
 ```
 
+**Redirect URL** — LinkedIn only redirects back to URLs registered exactly in
+your app (Auth tab → *Add redirect URL*). The OAuth flow runs a local callback
+server, so register `http://localhost:8000/callback` (or another fixed port)
+and tell the tool to use it — either persistently, or per-session via env
+(the env var wins over the persisted value):
+
+```bash
+post config set LINKEDIN_REDIRECT_URI=http://localhost:8000/callback
+# or, session-only:
+export LINKEDIN_REDIRECT_URI=http://localhost:8000/callback
+```
+
+The value must be **character-for-character identical** to the URL registered
+on LinkedIn (`http://` not `https://`, `localhost` not `127.0.0.1`, no
+trailing slash). The tool binds that exact port, prints the callback URL
+before opening the browser, and explains the fix on mismatched/busy ports.
+Without it the tool picks a random port per run, which LinkedIn won't match.
+
 ### LinkedIn permissions limitation
 
 LinkedIn's API no longer grants third-party apps the ability to publish to a

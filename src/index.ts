@@ -81,6 +81,9 @@ Environment:
 Values set with 'post config set' persist across terminal sessions. A variable
 set in the current shell (e.g. $env:LINKEDIN_CLIENT_ID="...") takes precedence
 over the persisted value.
+
+For 'post publish' OAuth: register http://localhost:8000/callback in your
+LinkedIn app (Auth tab) and set LINKEDIN_REDIRECT_URI=http://localhost:8000/callback.
 `;
 
 export async function runCli(argv: string[]): Promise<number> {

@@ -10,8 +10,14 @@ import { effectiveValue } from "../config/persist.js";
 export const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 export const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 
-/** Scopes needed to read the profile and publish to a personal feed. */
-export const SCOPES = ["r_liteprofile", "w_member_social"];
+/**
+ * Scopes needed to publish to a personal feed and resolve the member id.
+ * LinkedIn's OpenID Connect requires `openid`, `profile` and `email` to be
+ * requested together — omitting any of them fails with
+ * `openid_insufficient_scope_error`. `r_liteprofile` is deprecated and not
+ * granted to new apps.
+ */
+export const SCOPES = ["openid", "profile", "email", "w_member_social"];
 
 export interface OAuthCredentials {
   accessToken: string;
@@ -74,8 +80,11 @@ export interface CallbackHandle {
 }
 
 /**
- * Starts a loopback HTTP server that captures LinkedIn's redirect back to
- * `http://localhost:<port>/callback`. Resolves once the server is listening.
+ * Starts a loopback HTTP server that captures LinkedIn's redirect back to the
+ * callback URL. When LINKEDIN_REDIRECT_URI is a fixed URL (no `<port>`
+ * placeholder) the server binds exactly that URL's port so it can be
+ * registered verbatim in the LinkedIn app; otherwise a random free port is
+ * used (with `<port>` substituted in the env URL when present).
  */
 export function startCallbackServer(
   state: string,
@@ -84,6 +93,27 @@ export function startCallbackServer(
   return new Promise<CallbackHandle>((resolve, reject) => {
     let resolved = false;
     let callback!: (value: { code: string; state: string }) => void;
+    let rejectCallback!: (reason: Error) => void;
+
+    let listenPort = 0;
+    let listenHost = "127.0.0.1";
+    if (envRedirect && !envRedirect.includes("<port>")) {
+      try {
+        const parsed = new URL(envRedirect);
+        listenPort = Number(parsed.port);
+        listenHost = parsed.hostname === "localhost" ? "127.0.0.1" : parsed.hostname;
+        if (!Number.isInteger(listenPort) || listenPort <= 0 || listenPort > 65535) {
+          throw new Error("invalid port");
+        }
+      } catch {
+        reject(
+          new Error(
+            `Invalid LINKEDIN_REDIRECT_URI "${envRedirect}" — use e.g. http://localhost:8000/callback`,
+          ),
+        );
+        return;
+      }
+    }
 
     const server = createServer((req, res) => {
       const url = new URL(req.url ?? "/", "http://localhost");
@@ -100,6 +130,25 @@ export function startCallbackServer(
         setTimeout(() => server.close(), 250);
         return;
       }
+
+      const error = url.searchParams.get("error");
+      if (error) {
+        const desc = url.searchParams.get("error_description") ?? "";
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(
+          `<html><body><h2>post CLI</h2><p>Authorization failed: ${escapeHtml(error)}` +
+            `${desc ? ` — ${escapeHtml(desc)}` : ""}</p><p>You can close this tab.</p></body></html>`,
+        );
+        rejectCallback(
+          new Error(
+            `LinkedIn authorization failed: ${error}` +
+              `${desc ? ` — ${decodeURIComponent(desc)}` : ""}`,
+          ),
+        );
+        setTimeout(() => server.close(), 250);
+        return;
+      }
+
       if (path === "/" || path === "/callback") {
         res.writeHead(200);
         res.end("post CLI authorization server is running.");
@@ -109,19 +158,42 @@ export function startCallbackServer(
       res.end("Not found");
     });
 
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
+    server.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        reject(
+          new Error(
+            `Port ${listenPort} is already in use. Pick another free port, register it in ` +
+              "LinkedIn (Auth tab) and set LINKEDIN_REDIRECT_URI to the same URL.",
+          ),
+        );
+      } else if (err.code === "ENOTFOUND" || err.code === "EADDRNOTAVAIL" || err.code === "EACCES") {
+        reject(
+          new Error(
+            `Cannot bind the callback server to "${listenHost}:${listenPort}" — ` +
+              "LINKEDIN_REDIRECT_URI must point to a local address like " +
+              "http://localhost:8000/callback (matching the URL registered in your LinkedIn app).",
+          ),
+        );
+      } else {
+        reject(err);
+      }
+    });
+    server.listen(listenPort, listenHost, () => {
       const addr = server.address() as AddressInfo;
       const port = addr.port;
-      const base = envRedirect && envRedirect.includes("<port>")
-        ? envRedirect
-        : `http://localhost:${port}/callback`;
-      const redirectUri = base.replace("<port>", String(port));
+      let redirectUri: string;
+      if (envRedirect && !envRedirect.includes("<port>")) {
+        redirectUri = envRedirect;
+      } else {
+        const base = envRedirect ? envRedirect : `http://localhost:${port}/callback`;
+        redirectUri = base.replace("<port>", String(port));
+      }
       const handle: CallbackHandle = {
         port,
         redirectUri,
-        callback: new Promise((resolveCode) => {
+        callback: new Promise((resolveCode, rejectCode) => {
           callback = resolveCode;
+          rejectCallback = rejectCode;
         }),
         close: () => server.close(),
       };
@@ -129,12 +201,14 @@ export function startCallbackServer(
       resolve(handle);
     });
 
-    // If the server never starts, reject the callback promise too.
+    // If the callback never arrives, reject the startup promise and release
+    // the port so a re-run isn't blocked by a stale listener.
     setTimeout(() => {
-      if (!resolved) rejectCallback("Authorization server timed out");
+      if (!resolved) failStartup("Authorization server timed out");
     }, 90_000);
-    function rejectCallback(reason: string) {
+    function failStartup(reason: string) {
       if (!resolved) {
+        server.close();
         reject(new Error(reason));
         resolved = true;
       }
@@ -225,7 +299,18 @@ export async function runAuthorizationFlow(opts: {
   }
 
   const state = randomBytes(16).toString("hex");
-  const handle = await startCallbackServer(state, effectiveValue("LINKEDIN_REDIRECT_URI").value);
+  const envRedirect = effectiveValue("LINKEDIN_REDIRECT_URI").value;
+  const handle = await startCallbackServer(state, envRedirect);
+  const notice = opts.onNotice ?? console.log;
+  if (!envRedirect || envRedirect.includes("<port>")) {
+    notice(
+      "WARNING: LINKEDIN_REDIRECT_URI is not a fixed URL, so this callback uses a\n" +
+        "random localhost port — LinkedIn only accepts redirect URIs registered EXACTLY\n" +
+        "in your app (Developer Portal → Auth → Add redirect URL).\n" +
+        "Register:  http://localhost:8000/callback\n" +
+        "Then run:  post config set LINKEDIN_REDIRECT_URI=http://localhost:8000/callback",
+    );
+  }
   const authUrl =
     `${LINKEDIN_AUTH_URL}?response_type=code` +
     `&client_id=${encodeURIComponent(clientId)}` +
@@ -233,8 +318,8 @@ export async function runAuthorizationFlow(opts: {
     `&state=${state}` +
     `&scope=${encodeURIComponent(SCOPES.join(" "))}`;
 
-  const notice = opts.onNotice ?? console.log;
   notice("Opening your browser to authorize `post` with LinkedIn…");
+  notice(`Callback: ${handle.redirectUri}`);
   notice(authUrl);
   await openExternalBrowser(authUrl, opts.noBrowser);
 
@@ -259,4 +344,12 @@ export async function runAuthorizationFlow(opts: {
   await saveCredentials(cred);
   handle.close();
   return cred;
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
