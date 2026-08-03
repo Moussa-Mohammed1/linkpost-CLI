@@ -1,13 +1,16 @@
 {
   "name": "linkpost-cli",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Analyzes any software project in the current directory and generates a high-quality LinkedIn post about it.",
   "type": "module",
   "license": "MIT",
-  "repository": "github:Moussa-Mohammed1/post-cli",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Moussa-Mohammed1/post-cli.git"
+  },
   "homepage": "https://github.com/Moussa-Mohammed1/post-cli",
   "bin": {
-    "post": "./bin/post.js"
+    "post": "bin/post.js"
   },
   "main": "./dist/index.js",
   "files": [

@@ -1,3 +1,5 @@
+import { effectiveValue } from "../config/persist.js";
+
 export const ENV_VARS = [
   "POST_LLM_API_KEY",
   "OPENAI_API_KEY",
@@ -14,12 +16,14 @@ export const ENV_VARS = [
 export interface EnvStatus {
   name: string;
   value: string | null;
+  /** Where the value came from; undefined when unset. */
+  source?: "env" | "config";
 }
 
-/** Reads the tool's known env vars; unset/blank values become null. */
+/** Reads the tool's known env vars (process env, then persistent config). */
 export function readEnvs(names: readonly string[] = ENV_VARS): EnvStatus[] {
   return names.map((name) => {
-    const v = process.env[name]?.trim();
-    return { name, value: v ? v : null };
+    const { value, source } = effectiveValue(name);
+    return { name, value: value ?? null, source };
   });
 }

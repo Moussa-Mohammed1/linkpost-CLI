@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
 import { OpenAICompatibleProvider, resolveProvider } from "../src/llm/provider.js";
+import { isolateConfig } from "./helpers.js";
 
 interface RecordedRequest {
   url: string;
@@ -54,10 +55,15 @@ describe("resolveProvider", () => {
     url: process.env.POST_LLM_BASE_URL,
     openai: process.env.OPENAI_API_KEY,
   };
+  let restoreConfig: () => void = () => {};
+  beforeEach(async () => {
+    restoreConfig = await isolateConfig();
+  });
   afterEach(() => {
     process.env.POST_LLM_API_KEY = saved.key;
     process.env.POST_LLM_BASE_URL = saved.url;
     process.env.OPENAI_API_KEY = saved.openai;
+    restoreConfig();
   });
 
   it("returns undefined without any key or custom base URL", () => {

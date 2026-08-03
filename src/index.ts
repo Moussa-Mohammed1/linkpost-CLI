@@ -1,7 +1,14 @@
 import { join } from "node:path";
 import { generatePost } from "./commands/analyze.js";
 import { publishPost } from "./commands/publish.js";
-import { readEnvs } from "./commands/envs.js";
+import { ENV_VARS, readEnvs } from "./commands/envs.js";
+import {
+  configFilePath,
+  loadConfig,
+  setConfigValue,
+  unsetConfigValue,
+  effectiveValue,
+} from "./config/persist.js";
 import { loadPluginsFromDirs } from "./plugins/registry.js";
 
 export const VERSION = "1.0.0";
@@ -52,7 +59,10 @@ const HELP = `post — analyze a project and draft a LinkedIn post about it.
 Usage:
   post                  Analyze ./ and generate linkedin-post/
   post publish          Publish linkedin-post/content.txt (+ images/) to LinkedIn
-  post envs             Show the env vars this tool reads (name=null when unset)
+  post envs             Show the effective env/config values this tool uses
+  post config           List values stored in the persistent config file
+  post config set K=V   Persist K=V in ~/.post/config.json (survives restarts)
+  post config unset K   Remove K from the persistent config
 
 Options:
   --help, -h            Show this help
@@ -67,6 +77,10 @@ Environment:
     Configure the LLM used to polish the post (optional).
   LINKEDIN_CLIENT_ID / LINKEDIN_CLIENT_SECRET / LINKEDIN_ACCESS_TOKEN
     Credentials for 'post publish' (OAuth flow when first two are set).
+
+Values set with 'post config set' persist across terminal sessions. A variable
+set in the current shell (e.g. $env:LINKEDIN_CLIENT_ID="...") takes precedence
+over the persisted value.
 `;
 
 export async function runCli(argv: string[]): Promise<number> {
@@ -110,9 +124,13 @@ export async function runCli(argv: string[]): Promise<number> {
     }
     process.stdout.write("post: environment\n");
     for (const v of vars) {
-      process.stdout.write(`  ${v.name}=${v.value ?? "null"}\n`);
+      process.stdout.write(`  ${v.name}=${v.value ?? "null"}${v.source === "config" ? " (config)" : ""}\n`);
     }
     return 0;
+  }
+
+  if (command === "config") {
+    return runConfig(argv, flags.json);
   }
 
   if (command !== "" && command !== "analyze") {
@@ -126,7 +144,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
   // Custom user plugins from .post/plugins (project) or $POST_PLUGIN_DIR
   const pluginDirs = [
-    process.env.POST_PLUGIN_DIR,
+    effectiveValue("POST_PLUGIN_DIR").value,
     join(cwd, ".post", "plugins"),
   ].filter((p): p is string => Boolean(p));
 
@@ -173,4 +191,69 @@ export async function runCli(argv: string[]): Promise<number> {
 export async function main(argv: string[]): Promise<void> {
   const code = await runCli(argv);
   process.exitCode = code;
+}
+
+const KNOWN_KEYS = new Set<string>(ENV_VARS);
+
+/**
+ * `post config [set K=V | unset K]` — manages the persistent config file
+ * (~/.post/config.json). Values survive terminal restarts until changed.
+ */
+async function runConfig(argv: string[], json: boolean): Promise<number> {
+  const args = argv.filter((a) => !a.startsWith("-"));
+  const sub = args[1] ?? "list";
+
+  if (sub === "set") {
+    const pair = args[2];
+    if (!pair || !pair.includes("=")) {
+      process.stderr.write("Usage: post config set NAME=VALUE\n");
+      return 2;
+    }
+    const eq = pair.indexOf("=");
+    const name = pair.slice(0, eq).trim();
+    const value = pair.slice(eq + 1);
+    if (!KNOWN_KEYS.has(name)) {
+      process.stderr.write(`post: "${name}" is not a known variable. Known: ${ENV_VARS.join(", ")}\n`);
+      return 2;
+    }
+    await setConfigValue(name, value);
+    const msg = `Saved ${name} to ${configFilePath()}`;
+    if (json) process.stdout.write(JSON.stringify({ ok: true, name, value, file: configFilePath() }) + "\n");
+    else process.stdout.write(`${msg}\n`);
+    return 0;
+  }
+
+  if (sub === "unset") {
+    const name = args[2]?.trim();
+    if (!name) {
+      process.stderr.write("Usage: post config unset NAME\n");
+      return 2;
+    }
+    await unsetConfigValue(name);
+    if (json) process.stdout.write(JSON.stringify({ ok: true, name }) + "\n");
+    else process.stdout.write(`Removed ${name} from ${configFilePath()}\n`);
+    return 0;
+  }
+
+  if (sub !== "list") {
+    process.stderr.write(`post: unknown config subcommand "${sub}".\nUsage: post config [set NAME=VALUE | unset NAME]\n`);
+    return 2;
+  }
+
+  const stored = loadConfig();
+  if (json) {
+    process.stdout.write(JSON.stringify(stored, null, 2) + "\n");
+    return 0;
+  }
+  process.stdout.write(`post: config (${configFilePath()})\n`);
+  const keys = Object.keys(stored);
+  if (keys.length === 0) {
+    process.stdout.write("  (empty — use `post config set NAME=VALUE`)\n");
+    return 0;
+  }
+  for (const name of keys) {
+    const value = stored[name];
+    process.stdout.write(`  ${name}=${value?.trim() ? value : "(blank)"}\n`);
+  }
+  return 0;
 }

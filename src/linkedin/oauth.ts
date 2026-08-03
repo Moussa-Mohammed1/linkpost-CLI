@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { openExternalBrowser } from "./browser.js";
+import { effectiveValue } from "../config/persist.js";
 
 export const LINKEDIN_AUTH_URL = "https://www.linkedin.com/oauth/v2/authorization";
 export const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
@@ -34,9 +35,9 @@ export function credentialFilePath(): string {
 
 export function clientEnv(): { clientId?: string; clientSecret?: string; redirectUri?: string } {
   return {
-    clientId: process.env.LINKEDIN_CLIENT_ID,
-    clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
-    redirectUri: process.env.LINKEDIN_REDIRECT_URI,
+    clientId: effectiveValue("LINKEDIN_CLIENT_ID").value,
+    clientSecret: effectiveValue("LINKEDIN_CLIENT_SECRET").value,
+    redirectUri: effectiveValue("LINKEDIN_REDIRECT_URI").value,
   };
 }
 
@@ -215,8 +216,8 @@ export async function runAuthorizationFlow(opts: {
   noBrowser?: boolean;
   onNotice?: (msg: string) => void;
 }): Promise<OAuthCredentials> {
-  const clientId = opts.clientId ?? process.env.LINKEDIN_CLIENT_ID;
-  const clientSecret = opts.clientSecret ?? process.env.LINKEDIN_CLIENT_SECRET;
+  const clientId = opts.clientId ?? effectiveValue("LINKEDIN_CLIENT_ID").value;
+  const clientSecret = opts.clientSecret ?? effectiveValue("LINKEDIN_CLIENT_SECRET").value;
   if (!clientId) {
     throw new Error(
       "LinkedIn OAuth requires LINKEDIN_CLIENT_ID (and LINKEDIN_CLIENT_SECRET) to be set.",
@@ -224,7 +225,7 @@ export async function runAuthorizationFlow(opts: {
   }
 
   const state = randomBytes(16).toString("hex");
-  const handle = await startCallbackServer(state, process.env.LINKEDIN_REDIRECT_URI);
+  const handle = await startCallbackServer(state, effectiveValue("LINKEDIN_REDIRECT_URI").value);
   const authUrl =
     `${LINKEDIN_AUTH_URL}?response_type=code` +
     `&client_id=${encodeURIComponent(clientId)}` +

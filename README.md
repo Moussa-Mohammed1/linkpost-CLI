@@ -59,7 +59,9 @@ The analyze pipeline:
    - **Built-in writer** (`--no-llm`, or when no key is configured) produces a
      deterministic, fact-accurate post from the same facts. Nothing is invented.
 6. **Output** — writes `linkedin-post/` with `content.txt`, `metadata.json`,
-   `logs.txt` and an empty `images/` directory.
+   `logs.txt` and an empty `images/` directory. The generated `linkedin-post/`
+   folder is automatically added to the project's `.gitignore` (the file is
+   created when missing; an existing ignore rule is never duplicated).
 
 ### `post envs` — inspect configuration
 
@@ -78,6 +80,27 @@ post: environment
 ```
 
 `post envs --json` prints the same data machine-readable.
+
+### `post config` — persistent settings
+
+Environment variables set in a shell (`$env:VAR="…"` on Windows) only last for
+that terminal session. To keep credentials permanently until you change them,
+persist them with `post config` — stored in `~/.post/config.json`:
+
+```bash
+post config set LINKEDIN_CLIENT_ID=…
+post config set LINKEDIN_CLIENT_SECRET=…
+post config set LINKEDIN_VISIBILITY=PUBLIC
+post config              # list what is persisted
+post config unset LINKEDIN_VISIBILITY
+```
+
+Every variable the tool reads (see `post envs`) can be persisted this way and
+works in *any* new terminal, no re-export needed. A variable set in the current
+shell session always takes precedence over the persisted value, and
+`post envs` marks values that come from the config file with `(config)`.
+
+Set `POST_CONFIG_DIR` to relocate the config file (default `~/.post`).
 
 ### `post publish` — publish
 
