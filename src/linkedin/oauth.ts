@@ -73,8 +73,27 @@ export interface CallbackHandle {
 }
 
 /**
+ * Resolves a fixed port + redirect URI from a concrete LINKEDIN_REDIRECT_URI
+ * (e.g. `http://localhost:3000/callback`). Returns `{}` when the URI is unset
+ * or contains the `<port>` placeholder.
+ */
+function fixedRedirect(envRedirect?: string): { port?: number; uri?: string } {
+  if (!envRedirect || envRedirect.includes("<port>")) return {};
+  try {
+    const parsed = new URL(envRedirect);
+    if (!parsed.port) return {};
+    return { port: Number(parsed.port), uri: envRedirect };
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Starts a loopback HTTP server that captures LinkedIn's redirect back to
  * `http://localhost:<port>/callback`. Resolves once the server is listening.
+ * When LINKEDIN_REDIRECT_URI is a concrete URI with a port, the server binds
+ * that exact port and uses the URI verbatim (so it matches the registered
+ * redirect URL); otherwise a random free port is used.
  */
 export function startCallbackServer(
   state: string,
@@ -83,6 +102,7 @@ export function startCallbackServer(
   return new Promise<CallbackHandle>((resolve, reject) => {
     let resolved = false;
     let callback!: (value: { code: string; state: string }) => void;
+    const fixed = fixedRedirect(envRedirect);
 
     const server = createServer((req, res) => {
       const url = new URL(req.url ?? "/", "http://localhost");
@@ -109,12 +129,14 @@ export function startCallbackServer(
     });
 
     server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
+    server.listen(fixed.port ?? 0, "127.0.0.1", () => {
       const addr = server.address() as AddressInfo;
       const port = addr.port;
-      const base = envRedirect && envRedirect.includes("<port>")
-        ? envRedirect
-        : `http://localhost:${port}/callback`;
+      const base =
+        fixed.uri ??
+        (envRedirect && envRedirect.includes("<port>")
+          ? envRedirect
+          : `http://localhost:${port}/callback`);
       const redirectUri = base.replace("<port>", String(port));
       const handle: CallbackHandle = {
         port,
