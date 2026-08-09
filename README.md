@@ -59,7 +59,48 @@ The analyze pipeline:
    - **Built-in writer** (`--no-llm`, or when no key is configured) produces a
      deterministic, fact-accurate post from the same facts. Nothing is invented.
 6. **Output** — writes `linkedin-post/` with `content.txt`, `metadata.json`,
-   `logs.txt` and an empty `images/` directory.
+   `logs.txt` and an empty `images/` directory. The generated `linkedin-post/`
+   folder is automatically added to the project's `.gitignore` (the file is
+   created when missing; an existing ignore rule is never duplicated).
+
+### `post envs` — inspect configuration
+
+Prints every environment variable the tool reads, with its current value
+(`name=null` when unset). Use it to debug why the LLM or LinkedIn path isn't
+picking up configuration:
+
+```text
+post: environment
+  POST_LLM_API_KEY=null
+  OPENAI_API_KEY=null
+  POST_LLM_BASE_URL=null
+  POST_LLM_MODEL=gpt-4o-mini
+  LINKEDIN_CLIENT_ID=null
+  ...
+```
+
+`post envs --json` prints the same data machine-readable.
+
+### `post config` — persistent settings
+
+Environment variables set in a shell (`$env:VAR="…"` on Windows) only last for
+that terminal session. To keep credentials permanently until you change them,
+persist them with `post config` — stored in `~/.post/config.json`:
+
+```bash
+post config set LINKEDIN_CLIENT_ID=…
+post config set LINKEDIN_CLIENT_SECRET=…
+post config set LINKEDIN_VISIBILITY=PUBLIC
+post config              # list what is persisted
+post config unset LINKEDIN_VISIBILITY
+```
+
+Every variable the tool reads (see `post envs`) can be persisted this way and
+works in *any* new terminal, no re-export needed. A variable set in the current
+shell session always takes precedence over the persisted value, and
+`post envs` marks values that come from the config file with `(config)`.
+
+Set `POST_CONFIG_DIR` to relocate the config file (default `~/.post`).
 
 ### `post publish` — publish
 
@@ -78,6 +119,24 @@ Auth resolution order:
 export LINKEDIN_CLIENT_ID=… LINKEDIN_CLIENT_SECRET=…
 post publish
 ```
+
+**Redirect URL** — LinkedIn only redirects back to URLs registered exactly in
+your app (Auth tab → *Add redirect URL*). The OAuth flow runs a local callback
+server, so register `http://localhost:8000/callback` (or another fixed port)
+and tell the tool to use it — either persistently, or per-session via env
+(the env var wins over the persisted value):
+
+```bash
+post config set LINKEDIN_REDIRECT_URI=http://localhost:8000/callback
+# or, session-only:
+export LINKEDIN_REDIRECT_URI=http://localhost:8000/callback
+```
+
+The value must be **character-for-character identical** to the URL registered
+on LinkedIn (`http://` not `https://`, `localhost` not `127.0.0.1`, no
+trailing slash). The tool binds that exact port, prints the callback URL
+before opening the browser, and explains the fix on mismatched/busy ports.
+Without it the tool picks a random port per run, which LinkedIn won't match.
 
 ### LinkedIn permissions limitation
 
