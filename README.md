@@ -157,12 +157,12 @@ than working around it:
 
 All env vars are optional — without a key the built-in writer is used.
 
-| Variable             | Meaning                                            | Default                    |
-| -------------------- | -------------------------------------------------- | -------------------------- |
-| `OPENAI_API_KEY`     | OpenAI key (secondary alias)                       | —                          |
-| `POST_LLM_API_KEY`   | LLM key (takes precedence)                         | `OPENAI_API_KEY`           |
-| `POST_LLM_BASE_URL`  | OpenAI-compatible base URL (Ollama, OpenRouter…)   | `https://api.openai.com/v1`|
-| `POST_LLM_MODEL`     | Model name                                         | `gpt-4o-mini`              |
+| Variable              | Meaning                                           | Default                       |
+| --------------------- | ------------------------------------------------- | ----------------------------- |
+| `OPENAI_API_KEY`    | OpenAI key (secondary alias)                      | —                            |
+| `POST_LLM_API_KEY`  | LLM key (takes precedence)                        | `OPENAI_API_KEY`            |
+| `POST_LLM_BASE_URL` | OpenAI-compatible base URL (Ollama, OpenRouter…) | `https://api.openai.com/v1` |
+| `POST_LLM_MODEL`    | Model name                                        | `gpt-4o-mini`               |
 
 ## Custom analyzer plugins
 
@@ -189,9 +189,7 @@ export default {
 `hasModule`, `modules()` and the parsed `pkg`. Plugins are async-capable and
 must never throw (errors are caught and logged).
 
-Task: supported categories: `language | frontend-framework | backend-framework |
-database | orm | deployment | docker | ci-cd | testing | authentication | ai |
-cloud | other`.
+Task: supported categories: `language | frontend-framework | backend-framework | database | orm | deployment | docker | ci-cd | testing | authentication | ai | cloud | other`.
 
 ## Development
 

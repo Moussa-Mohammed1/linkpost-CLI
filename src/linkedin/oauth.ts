@@ -80,6 +80,22 @@ export interface CallbackHandle {
 }
 
 /**
+ * Resolves a fixed port + redirect URI from a concrete LINKEDIN_REDIRECT_URI
+ * (e.g. `http://localhost:3000/callback`). Returns `{}` when the URI is unset
+ * or contains the `<port>` placeholder.
+ */
+function fixedRedirect(envRedirect?: string): { port?: number; uri?: string } {
+  if (!envRedirect || envRedirect.includes("<port>")) return {};
+  try {
+    const parsed = new URL(envRedirect);
+    if (!parsed.port) return {};
+    return { port: Number(parsed.port), uri: envRedirect };
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Starts a loopback HTTP server that captures LinkedIn's redirect back to the
  * callback URL. When LINKEDIN_REDIRECT_URI is a fixed URL (no `<port>`
  * placeholder) the server binds exactly that URL's port so it can be
@@ -93,27 +109,7 @@ export function startCallbackServer(
   return new Promise<CallbackHandle>((resolve, reject) => {
     let resolved = false;
     let callback!: (value: { code: string; state: string }) => void;
-    let rejectCallback!: (reason: Error) => void;
-
-    let listenPort = 0;
-    let listenHost = "127.0.0.1";
-    if (envRedirect && !envRedirect.includes("<port>")) {
-      try {
-        const parsed = new URL(envRedirect);
-        listenPort = Number(parsed.port);
-        listenHost = parsed.hostname === "localhost" ? "127.0.0.1" : parsed.hostname;
-        if (!Number.isInteger(listenPort) || listenPort <= 0 || listenPort > 65535) {
-          throw new Error("invalid port");
-        }
-      } catch {
-        reject(
-          new Error(
-            `Invalid LINKEDIN_REDIRECT_URI "${envRedirect}" — use e.g. http://localhost:8000/callback`,
-          ),
-        );
-        return;
-      }
-    }
+    const fixed = fixedRedirect(envRedirect);
 
     const server = createServer((req, res) => {
       const url = new URL(req.url ?? "/", "http://localhost");
